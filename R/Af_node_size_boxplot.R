@@ -5,7 +5,6 @@
 #' @param min.nodes The minimum number of nodes for a tree to be included in this analysis (this included the germline)
 #' @param groups Which groups to compare. These groups need to be in the node features of the AntibodyForests-object. Set to NA if all features should displayed. (default is NA)
 #' If you want to compare IgM and IgG for example, groups should be c("IgM, "IgG") (not "Isotypes")
-#' @param unconnected If TRUE, trees that don't have all groups will be plotted, but not included in significance analysis. (default FALSE)
 #' @param colors Optionally specific colors for the group (Will be matched to the groups/names on alphabetical order).
 #' @param text.size Font size in the plot (default 20).
 #' @param x.label Label for the x-axis (default is the node feature).
@@ -27,7 +26,6 @@ Af_node_size_boxplot <- function(AntibodyForests_object,
                                 min.nodes,
                                 groups,
                                 node.feature,
-                                unconnected,
                                 colors,
                                 text.size,
                                 x.label,
@@ -45,7 +43,6 @@ Af_node_size_boxplot <- function(AntibodyForests_object,
   if(missing(parallel)){parallel <- F}
   if(missing(x.label)){x.label = node.feature}
   if(missing(significance)){significance = F}
-  if(missing(unconnected)){unconnected = F}
   if(missing(group.order)){group.order = NA}
   if(missing(output.file)){output.file <- NULL}
   #Check if group are in the metric dataframe
@@ -68,16 +65,13 @@ Af_node_size_boxplot <- function(AntibodyForests_object,
                           node.feature = node.feature,
                           group.node.feature = groups)
   #Remove column with sample names
-  df_all <- metric_df[,colnames(metric_df) != "sample"]
+  df <- metric_df[,colnames(metric_df) != "sample"]
   
   #Error if zero or only one tree is in the metric_df
-  if(is.null(nrow(df_all))){stop("Your AntibodyForests-object does not have enough trees that pass the min.nodes threshold.")}
+  if(is.null(nrow(df))){stop("Your AntibodyForests-object does not have enough trees that pass the min.nodes threshold.")}
   
   #Add clonotype as column
-  df_all$clonotype <- rownames(df_all)
-  
-  #Only keep clonotypes that have nodes of all groups
-  df <- as.data.frame(stats::na.omit(df_all))
+  df$clonotype <- rownames(df)
   
   #Check if there are clonotypes left after NA removal
   if(nrow(df) == 0){stop("No trees contain nodes from all groups.")}
@@ -102,9 +96,7 @@ Af_node_size_boxplot <- function(AntibodyForests_object,
   #Plot the grouped boxplots with lines
   p <- ggplot2::ggplot(df, ggplot2::aes(x=group, y=depth, fill=group)) +
     ggplot2::geom_boxplot()+
-    ggplot2::geom_point()+
     ggplot2::scale_fill_manual(values=colors) +
-    ggplot2::geom_line(ggplot2::aes(group=clonotype)) +
     ggplot2::theme_classic() +
     ggplot2::theme(text = ggplot2::element_text(size = text.size),
                    legend.position = "none")  +
@@ -123,18 +115,6 @@ Af_node_size_boxplot <- function(AntibodyForests_object,
     #Add to the existing plot
     p <- p + ggsignif::geom_signif(comparisons=combinations_list, step_increase = 0.1, test = "t.test",
                                    test.args = list(paired = T))
-  }
-  
-  #Add unconnected points
-  if(unconnected){
-    #Create dataframe with trees that don't have all groups
-    df_na <- df_all[rowSums(is.na(df_all)) > 0,]
-    #Transform dataframe for visualization
-    df_na <- tidyr::pivot_longer(df_na, cols=colnames(df_na)[1:ncol(df_na)-1],
-                                 names_to='group',
-                                 values_to='depth')
-    #Add to the plot
-    p <- p + ggplot2::geom_point(data = df_na, color = "darkgrey", ggplot2::aes(x=group, y=depth))
   }
   
   if(!is.null(output.file)){
